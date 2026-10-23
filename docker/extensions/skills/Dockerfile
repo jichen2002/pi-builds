@@ -1,7 +1,7 @@
+# syntax=docker/dockerfile:1.7
 # Skill-only experimental variant. No executable Extension or third-party tool
 # is added: Pi advertises this SKILL.md and loads its body only on demand.
 # Requires Docker BuildKit (Dockerfile heredoc syntax).
-# syntax=docker/dockerfile:1.7
 ARG BASE_IMAGE=pi-builds:baseline
 FROM ${BASE_IMAGE}
 

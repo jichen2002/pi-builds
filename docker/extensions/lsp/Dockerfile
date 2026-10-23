@@ -1,10 +1,10 @@
 # LSP-only experimental variant. pi-diet-lsp has no AST search, auto-diagnostics
 # or Skill injection. Install language servers at build time, not by the agent.
+ARG BASE_IMAGE=pi-builds:baseline
 FROM golang:1.27-bookworm AS gopls-build
 ARG GOPLS_VERSION=v0.24.0
 RUN CGO_ENABLED=0 go install "golang.org/x/tools/gopls@${GOPLS_VERSION}"
 
-ARG BASE_IMAGE=pi-builds:baseline
 FROM ${BASE_IMAGE}
 
 ARG LSP_EXTENSION_VERSION=0.1.9
