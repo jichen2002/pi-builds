@@ -2,7 +2,7 @@
 
 基于 [Pi Coding Agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) 构建可复现、可组合的 Docker 镜像，用于研究不同 Agent 组件对 Coding 任务的实际增益。
 
-> **当前状态：Dockerfile 初版。** 已实现 Baseline 和五类扩展镜像的 Dockerfile；Context Management 暂缓。根目录的空 `Dockerfile` 仍为占位文件，构建请使用 `docker/` 下的文件。尚未在 CI 中完成实际 Docker build 验证。
+> **当前状态：Dockerfile + Makefile 初版。** 已实现 Baseline 和五类扩展镜像的 Dockerfile，可通过根目录 `Makefile` 构建；Context Management 暂缓。尚未在 CI 中完成实际 Docker build 验证。
 
 ## 项目背景
 
@@ -32,6 +32,7 @@ Coding Agent 的最终表现不仅取决于底层 LLM，还与工具能力、任
 ```text
 pi-builds/
 ├── README.md
+├── Makefile
 └── docker/
     ├── baseline/
     │   └── Dockerfile              # Node.js + Pi Coding Agent
@@ -96,17 +97,31 @@ pi-builds/
 
 ## 镜像构建与使用
 
-在仓库根目录依次构建。先构建 Baseline，再分别构建需要的扩展镜像：
+在仓库根目录运行 Make 命令，所有目标均以仓库根目录作为 Docker build context：
 
 ```bash
-docker build -f docker/baseline/Dockerfile -t pi-builds:baseline .
-
-docker build -f docker/extensions/lsp/Dockerfile -t pi-builds:lsp .
-docker build -f docker/extensions/ast-search/Dockerfile -t pi-builds:ast-search .
-docker build -f docker/extensions/plan-todo/Dockerfile -t pi-builds:plan-todo .
-docker build -f docker/extensions/subagent/Dockerfile -t pi-builds:subagent .
-docker build -f docker/extensions/skills/Dockerfile -t pi-builds:skills .
+make                 # 构建 Baseline 和五种扩展
+make baseline        # 只构建 Baseline
+make lsp             # 构建 Baseline + LSP
+make ast-search      # 构建 Baseline + AST Search
+make plan-todo       # 构建 Baseline + Plan/Todo
+make subagent        # 构建 Baseline + Subagent
+make skills          # 构建 Baseline + Skills
+make extensions      # 构建 Baseline + 全部扩展
+make help            # 查看可用目标和变量
 ```
+
+默认的扩展目标依赖 Baseline，先构建父镜像，再构建对应扩展；Docker 会复用已缓存的镜像层。默认镜像标签为 `pi-builds:baseline`、`pi-builds:lsp`、`pi-builds:ast-search`、`pi-builds:plan-todo`、`pi-builds:subagent`、`pi-builds:skills`。
+
+支持覆盖镜像名称、Pi 版本和 Docker 构建选项：
+
+```bash
+make all IMAGE_NAME=my-pi PI_VERSION=1.4.0
+make lsp DOCKER_BUILD_ARGS="--progress=plain --no-cache"
+make lsp BASE_IMAGE=custom/pi:baseline  # 外部父镜像存在时无需构建本地 Baseline
+```
+
+`DOCKER_BUILD_ARGS` 也可以向 Dockerfile 传递额外的 `--build-arg`（如 `LSP_EXTENSION_VERSION`、`GOPLS_VERSION`）。修改 Pi 版本时应同步确认 Plan/Todo 和 Subagent 的 `PI_SOURCE_COMMIT` 与 Pi 运行版本兼容。Skills 镜像使用 Dockerfile heredoc，需要 BuildKit。
 
 所有扩展 Dockerfile 默认 `ARG BASE_IMAGE=pi-builds:baseline`，可通过 `--build-arg BASE_IMAGE=...` 指定另一个已构建的基线镜像。Baseline 默认固定 Pi `1.4.0`。正式实验还应固定基础镜像 Digest 并保存实际构建产生的 Digest。
 
