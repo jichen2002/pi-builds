@@ -2,7 +2,7 @@
 
 基于 [Pi Coding Agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) 构建可复现、可组合的 Docker 镜像，用于研究不同 Agent 组件对 Coding 任务的实际增益。
 
-> **当前状态：规划阶段。** 仓库目前只有一个空的根目录 `Dockerfile`；下文的目录、镜像变体和构建命令是目标设计，尚未全部实现。
+> **当前状态：Dockerfile 初版。** 已实现 Baseline 和五类扩展镜像的 Dockerfile；Context Management 暂缓。根目录的空 `Dockerfile` 仍为占位文件，构建请使用 `docker/` 下的文件。尚未在 CI 中完成实际 Docker build 验证。
 
 ## 项目背景
 
@@ -25,41 +25,31 @@ Coding Agent 的最终表现不仅取决于底层 LLM，还与工具能力、任
 4. **在容器层控制能力。** 不能仅靠 Pi 的 Tool 配置禁用某个组件：模型拥有 Bash 权限，可能执行程序、修改配置或自行安装插件。实验镜像应尽量只包含当前实验允许的能力。
 5. **兼容无人值守评测。** 扩展应优先支持非交互运行，避免依赖 TUI 人工确认；镜像内不预置密钥。
 
-## 预期目录结构
+## Dockerfile 目录结构
 
-以下为**规划结构**，并非当前仓库已存在的文件：
+以下六个 Dockerfile 已写入仓库：
 
 ~~~text
 pi-builds/
 ├── README.md
-├── Dockerfile                       # 当前空占位文件，后续整理
-├── docker/
-│   ├── base/
-│   │   └── Dockerfile               # Node.js、Pi、通用 CLI 依赖
-│   ├── baseline/
-│   │   └── Dockerfile               # 原生 Pi Coding Agent
-│   └── extensions/
-│       ├── lsp/
-│       │   └── Dockerfile
-│       ├── ast-search/
-│       │   └── Dockerfile
-│       ├── plan-todo/
-│       │   └── Dockerfile
-│       ├── subagent/
-│       │   └── Dockerfile
-│       ├── skills/
-│       │   └── Dockerfile
-│       └── context-management/
-│           └── Dockerfile
-├── configs/                          # 每种镜像的 Pi 配置
-│   ├── baseline/
-│   └── extensions/
-├── skills/                           # 实验使用的 Skill 内容
-├── scripts/                          # 构建与 Smoke Test 脚本
-└── manifests/                        # 镜像变体及版本清单
+├── Dockerfile                      # 原有空占位文件，请勿用于构建
+└── docker/
+    ├── baseline/
+    │   └── Dockerfile              # Node.js + Pi Coding Agent
+    └── extensions/
+        ├── lsp/
+        │   └── Dockerfile          # LSP
+        ├── ast-search/
+        │   └── Dockerfile          # AST Search / Rewrite
+        ├── plan-todo/
+        │   └── Dockerfile          # Todo + 可选 Plan Mode
+        ├── subagent/
+        │   └── Dockerfile          # 独立子 Agent
+        └── skills/
+            └── Dockerfile          # Regression Debugging Skill
 ~~~
 
-目录只表示实验维度，不要求每种能力永久对应唯一实现。例如 LSP 可以根据语言服务或具体 Extension 拆分子变体；Plan 与 Todo 也可以在后续分别构建，以避免混淆两种机制的增益。
+不再设置单独的通用 `base` 镜像；**Baseline 自身就是五类扩展镜像的父镜像**。`Context Management` 保留为后续评测方向，目前不创建对应 Dockerfile。
 
 ## Agent Baseline
 
@@ -85,7 +75,7 @@ pi-builds/
 
 ## 计划评测的扩展方向
 
-以下均为**候选方向**，并不表示对应 Dockerfile、第三方插件或实验结果已完成。
+以下均为**候选评测方向**。LSP、AST Search、Plan/Todo、Subagent、Skill 的 Dockerfile 已实现初版，但尚未完成 Docker 构建或端到端评测；Context Management 暂缓。
 
 | 方向 | 拟增加的能力 | 主要研究问题 | 可参考的实现 |
 | --- | --- | --- | --- |
@@ -105,37 +95,40 @@ pi-builds/
 - **Subagent Tool 与固定多 Agent 工作流**：前者由主模型决定是否委派，后者由外部工作流规定执行步骤。
 - **Skill 内容与 Prompt Engineering**：Skill 本质包含指令信息，需记录其加载时机、可见内容与额外 Token。
 
-## 镜像构建与使用（规划）
+## 镜像构建与使用
 
-基础镜像计划使用 Node.js 运行时，通过 npm 直接安装 Pi，无须从 Monorepo 编译：
-
-~~~dockerfile
-FROM node:24-bookworm-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash git ripgrep ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# 正式实现时固定到经过验证的确切版本
-ARG PI_VERSION
-RUN test -n "$PI_VERSION" && \
-    npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
-
-WORKDIR /workspace
-ENTRYPOINT ["pi"]
-~~~
-
-各扩展镜像在共同基础镜像之上安装对应插件及其运行依赖，不在任务执行时在线安装。构建时固定插件版本；必要时以只读方式提供配置和插件目录。
-
-待目录与 Dockerfile 落地后，预期使用类似命令构建（**当前不可直接执行**）：
+在仓库根目录依次构建。先构建 Baseline，再分别构建需要的扩展镜像：
 
 ~~~bash
-docker build -f docker/base/Dockerfile -t pi-builds:base .
 docker build -f docker/baseline/Dockerfile -t pi-builds:baseline .
+
 docker build -f docker/extensions/lsp/Dockerfile -t pi-builds:lsp .
+docker build -f docker/extensions/ast-search/Dockerfile -t pi-builds:ast-search .
+docker build -f docker/extensions/plan-todo/Dockerfile -t pi-builds:plan-todo .
+docker build -f docker/extensions/subagent/Dockerfile -t pi-builds:subagent .
+docker build -f docker/extensions/skills/Dockerfile -t pi-builds:skills .
 ~~~
 
-镜像应支持非交互启动，如 `pi --mode rpc --no-session`。具体如何与 Harbor 的 Agent/Task 执行协议对接，将在后续实现；**Agent 容器与 Case 容器的文件系统和进程环境不能因为共享工作目录就被视为完全相同**。
+所有扩展 Dockerfile 默认 `ARG BASE_IMAGE=pi-builds:baseline`，可通过 `--build-arg BASE_IMAGE=...` 指定另一个已构建的基线镜像。Baseline 默认固定 Pi `1.4.0`。正式实验还应固定基础镜像 Digest 并保存实际构建产生的 Digest。
+
+| 镜像 | 已集成的内容 | 需要注意 |
+| --- | --- | --- |
+| `baseline` | Pi `@earendil-works/pi-coding-agent@1.4.0`、Git、ripgrep 等 | 不增加第三方能力 |
+| `lsp` | `pi-diet-lsp@0.1.9`、固定版本的 TypeScript Language Server、Pyright、`gopls@v0.24.0` | 按需 LSP 查询，不额外提供 AST Search；Go 工具链使镜像明显更大 |
+| `ast-search` | `@juvio15/pi-ast-grep@0.4.2`、`@ast-grep/cli@0.45.3` | 显式关闭该插件附带的 Skill，减少与 Skill 实验的混淆 |
+| `plan-todo` | Pi `v1.4.0` 源码对应的 Todo、Plan Mode 示例 | **Todo 可用于无人值守任务；原版 Plan Mode 的“规划后确认执行”需要交互 UI，不能直接当作无人值守 Plan 实验** |
+| `subagent` | Pi `v1.4.0` 官方 Subagent 示例和四种 Agent 定义 | 删除示例里写死的 Claude 模型，子 Agent 继承主模型；不复制预设工作流 Prompt |
+| `skills` | 自带的 `regression-debugging` Skill | 只改变按需指导信息，不安装额外执行工具；需要支持 heredoc 的 Docker BuildKit |
+
+Plan/Todo 和 Subagent 的官方示例文件固定到 Pi `v1.4.0` 的源码 Commit `4a080252f06caf63a525d7873c5d94d3c23887e0`，避免构建时随 `main` 分支漂移。下载发生在构建阶段，正常评测不需要在线安装插件。
+
+所有镜像继承 Baseline 的 `ENTRYPOINT ["pi"]` 和 `WORKDIR /workspace`，可以在启动容器时传入 `--mode rpc --no-session` 等参数。示例：
+
+~~~bash
+docker run --rm -i -v "$PWD:/workspace" pi-builds:baseline --mode rpc --no-session
+~~~
+
+上述命令仅说明 Pi 的执行入口，并非 Harbor Agent Adapter 的完整实现。接入 Harbor 时还需要处理任务输入、停止条件和工具执行环境。**Agent 容器与 Case 容器共享工作目录，不代表它们有相同的运行时、依赖或进程视图。**
 
 ## 实验与可复现性约定
 
