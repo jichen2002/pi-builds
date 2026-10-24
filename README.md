@@ -38,7 +38,7 @@ pi-builds/
     │   └── Dockerfile              # Node.js + Pi Coding Agent
     └── extensions/
         ├── lsp/
-        │   └── Dockerfile          # LSP
+        │   └── Dockerfile          # Python LSP (Pyright)
         ├── ast-search/
         │   └── Dockerfile          # AST Search / Rewrite
         ├── plan-todo/
@@ -82,7 +82,7 @@ pi-builds/
 
 | 方向                   | 拟增加的能力                                                   | 主要研究问题                                                      | 可参考的实现                                                                                                                                                                                                                           |
 | ---------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **LSP**                | 定义跳转、引用查找、符号索引、类型/诊断信息                    | 能否减少跨文件定位成本，提高语义修改准确率？                      | Pi 社区 LSP 扩展 + `gopls` / `pyright` / TypeScript Language Server                                                                                                                                                                    |
+| **LSP（Python-only）** | 定义跳转、引用查找、符号索引、类型/诊断信息                   | 能否减少跨文件定位成本，提高语义修改准确率？                      | `pi-diet-lsp` + `pyright`（先针对 SWE-bench Verified）                                                                                                                                                                    |
 | **AST Search**         | 基于语法树的结构化搜索、代码 Outline；可进一步测试 AST Rewrite | 与 `rg` + `read` 相比，是否能更准确定位代码结构并减少上下文开销？ | `ast-grep` 及相应 Pi Extension                                                                                                                                                                                                         |
 | **Plan / Todo**        | 显式任务清单、步骤跟踪、先规划后执行的工作流                   | 是否减少复杂任务遗漏？强制 Plan 与可选 Todo 哪种更有效？          | [Pi Plan Mode 示例](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/plan-mode)、[Todo 示例](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/todo.ts) |
 | **Subagent**           | 独立上下文的任务委派；可测试探索、实现、审查及并行执行         | 隔离上下文与多 Agent 协作是否提升任务成功率，代价是多少？         | [Pi Subagent 示例](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/subagent)                                                                                                                  |
@@ -128,19 +128,31 @@ make lsp BASE_IMAGE=custom/pi:baseline  # 外部父镜像存在时无需构建�
 
 **Docker Hub Token 兼容性：** 当前默认 `docker` Driver 的构建环境中出现过 `docker pull` 正常、但 Buildx 客户端访问 `auth.docker.io/token` 时连接被重置的情况。已在 Makefile 默认导出 `BUILDKIT_NO_CLIENT_TOKEN=1`，使 Token 获取由 BuildKit 后端处理，因此通常可以直接执行 `make lsp` 或 `make all`。如不需要这一兼容设置，可以使用 `BUILDKIT_NO_CLIENT_TOKEN=0 make lsp` 覆盖。该配置可能改变 Registry 凭据的传递路径；使用独立远程或不可信 Builder 时，应评估认证和凭据安全性。
 
-`DOCKER_BUILD_ARGS` 也可以向 Dockerfile 传递额外的 `--build-arg`（如 `LSP_EXTENSION_VERSION`、`GOPLS_VERSION`）。修改 Pi 版本时应同步确认 Plan/Todo 和 Subagent 的 `PI_SOURCE_COMMIT` 与 Pi 运行版本兼容。Skills 镜像使用 Dockerfile heredoc，需要 BuildKit。
+`DOCKER_BUILD_ARGS` 也可以向 Dockerfile 传递额外的 `--build-arg`（如 `LSP_EXTENSION_VERSION`、`PYRIGHT_VERSION`）。修改 Pi 版本时应同步确认 Plan/Todo 和 Subagent 的 `PI_SOURCE_COMMIT` 与 Pi 运行版本兼容。Skills 镜像使用 Dockerfile heredoc，需要 BuildKit。
 
 所有扩展 Dockerfile 默认 `ARG BASE_IMAGE=pi-builds:baseline`，可通过 `--build-arg BASE_IMAGE=...` 指定另一个已构建的基线镜像。Baseline 默认固定 Pi `1.4.0`。正式实验还应固定基础镜像 Digest 并保存实际构建产生的 Digest。
 
 | 镜像         | 已集成的内容                                                                         | 需要注意                                                                                                  |
 | ------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `baseline`   | Pi `@earendil-works/pi-coding-agent@1.4.0`、Git、ripgrep 等                          | 不增加第三方能力                                                                                          |
-| `lsp`        | `pi-diet-lsp@0.1.9`、固定版本的 TypeScript Language Server、Pyright、`gopls@v0.24.0` | 按需 LSP 查询，不额外提供 AST Search；Go 工具链使镜像明显更大                                             |
+| `lsp`        | `pi-diet-lsp@0.1.9`、`pyright@1.1.413` | 仅预装 Python 语言服务器；不包含 gopls、Go Toolchain 或 TypeScript Language Server                                             |
 | `ast-search` | `@juvio15/pi-ast-grep@0.4.2`、`@ast-grep/cli@0.45.3`                                 | 显式关闭该插件附带的 Skill，减少与 Skill 实验的混淆                                                       |
 | `plan-todo`  | Pi `v1.4.0` 源码对应的 Todo、Plan Mode 示例                                          | **Todo 可用于无人值守任务；原版 Plan Mode 的“规划后确认执行”需要交互 UI，不能直接当作无人值守 Plan 实验** |
 | `subagent`   | Pi `v1.4.0` 官方 Subagent 示例和四种 Agent 定义                                      | 删除示例里写死的 Claude 模型，子 Agent 继承主模型；不复制预设工作流 Prompt                                |
 | `skills`     | 自带的 `regression-debugging` Skill                                                  | 只改变按需指导信息，不安装额外执行工具；需要支持 heredoc 的 Docker BuildKit                               |
 | `web-search` | `pi-web-access@0.44.0`（只启用 `web_search`） | 搜索 Provider 由运行时配置决定；默认 `auto`，不启用 Fetch、Source Check 或交互命令 |
+
+### Python-only LSP 镜像
+
+`make lsp` 构建 `pi-builds:lsp`，目前只为 **SWE-bench Verified（Python）** 安装 `pyright-langserver`，使用 `pi-diet-lsp` 提供按需查询定义、引用、符号和诊断的工具。不再构建 Go 多阶段镜像，也不安装 gopls、Go Toolchain、TypeScript 或 TypeScript Language Server。
+
+Pyright 本身通过 Node.js 运行；**Case 环境仍需提供用于构建、安装依赖和测试的 Python 工具链**，并确保 Agent 的 LSP 进程能够访问正确的源码、虚拟环境和依赖。这里限制的是本镜像预装的语言服务器；`pi-diet-lsp` 本身仍包含其他语言的内置映射，如果运行环境的 `PATH` 另有对应服务器，插件仍可能调用它们。正式实验需要固定实际执行环境以保证只有 Python LSP 可用。
+
+```bash
+make lsp
+# 如需变更 Pyright 版本：
+make lsp DOCKER_BUILD_ARGS="--build-arg PYRIGHT_VERSION=1.1.413"
+```
 
 ### Web Search 镜像（运行时选择搜索后端）
 

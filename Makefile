@@ -44,7 +44,7 @@ help:
 		'  make all             Same as make' \
 		'  make baseline        Build only the Pi baseline' \
 		'  make extensions      Build all six extension images (and baseline if needed)' \
-		'  make lsp             Build the LSP variant' \
+		'  make lsp             Build the Python-only LSP variant' \
 		'  make ast-search      Build the AST Search variant' \
 		'  make plan-todo       Build the Plan/Todo variant' \
 		'  make subagent        Build the Subagent variant' \
