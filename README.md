@@ -166,13 +166,13 @@ make lsp DOCKER_BUILD_ARGS="--build-arg PYRIGHT_VERSION=1.1.413"
 
 ### Skills 镜像（diagnosing-bugs + tdd）
 
-`make skills` 构建 `pi-builds:skills`，安装来自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `diagnosing-bugs` 和 `tdd` 两个 Skill。原先 Dockerfile 中的 `regression-debugging` 已被替换，避免近似工作流混杂。
+`make skills` 按当前 Makefile 默认镜像名构建 `waybackmachine/pi-agent:skills`，安装来自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `diagnosing-bugs` 和 `tdd` 两个 Skill。原先 Dockerfile 中的 `regression-debugging` 已被替换，避免近似工作流混杂。
 
 所有 Skill 均作为本仓库文件管理，构建时通过 `COPY` 安装到 `/root/.pi/agent/skills/`。除两个 `SKILL.md` 外，包含上游引用的 `tests.md`、`mocking.md` 与 `hitl-loop.template.sh`。上游源代码 Commit、文件范围和 MIT 许可证记录在 [UPSTREAM.md](docker/extensions/skills/UPSTREAM.md)，不会在 Docker 构建时动态拉取最新版本。
 
 ```bash
 make skills
-docker run --rm -it pi-builds:skills
+docker run --rm -it waybackmachine/pi-agent:skills
 ```
 
 **SWE-bench Verified 无人值守注意事项：** 为便于复现，这里保留上游原版。原版 `diagnosing-bugs` 严格要求先找到可复现的失败反馈，可能在无法复现时寻求人类输入；原版 `tdd` 要求用户确认测试接口，并引用未安装的 `codebase-design` Skill。建议记录实际激活率、阶段阻塞、Token 和工具开销；如需要自动化适配，应该另建版本而不是悄悄修改这份上游快照。
