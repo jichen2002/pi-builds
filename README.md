@@ -121,6 +121,8 @@ make lsp DOCKER_BUILD_ARGS="--progress=plain --no-cache"
 make lsp BASE_IMAGE=custom/pi:baseline  # 外部父镜像存在时无需构建本地 Baseline
 ```
 
+**Docker Hub Token 兼容性：** 当前默认 `docker` Driver 的构建环境中出现过 `docker pull` 正常、但 Buildx 客户端访问 `auth.docker.io/token` 时连接被重置的情况。已在 Makefile 默认导出 `BUILDKIT_NO_CLIENT_TOKEN=1`，使 Token 获取由 BuildKit 后端处理，因此通常可以直接执行 `make lsp` 或 `make all`。如不需要这一兼容设置，可以使用 `BUILDKIT_NO_CLIENT_TOKEN=0 make lsp` 覆盖。该配置可能改变 Registry 凭据的传递路径；使用独立远程或不可信 Builder 时，应评估认证和凭据安全性。
+
 `DOCKER_BUILD_ARGS` 也可以向 Dockerfile 传递额外的 `--build-arg`（如 `LSP_EXTENSION_VERSION`、`GOPLS_VERSION`）。修改 Pi 版本时应同步确认 Plan/Todo 和 Subagent 的 `PI_SOURCE_COMMIT` 与 Pi 运行版本兼容。Skills 镜像使用 Dockerfile heredoc，需要 BuildKit。
 
 所有扩展 Dockerfile 默认 `ARG BASE_IMAGE=pi-builds:baseline`，可通过 `--build-arg BASE_IMAGE=...` 指定另一个已构建的基线镜像。Baseline 默认固定 Pi `1.4.0`。正式实验还应固定基础镜像 Digest 并保存实际构建产生的 Digest。

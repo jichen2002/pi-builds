@@ -5,6 +5,10 @@ IMAGE_NAME ?= pi-builds
 PI_VERSION ?= 1.4.0
 DOCKER_BUILD_ARGS ?=
 
+# Avoid Docker Hub client-side OAuth token fetch failures with the docker Buildx driver.
+# Export to every Docker build recipe; caller may override e.g. BUILDKIT_NO_CLIENT_TOKEN=0.
+export BUILDKIT_NO_CLIENT_TOKEN ?= 1
+
 BASELINE_IMAGE := $(IMAGE_NAME):baseline
 BASE_IMAGE ?= $(BASELINE_IMAGE)
 EXTENSIONS := lsp ast-search plan-todo subagent skills
@@ -51,4 +55,5 @@ help:
 		'  IMAGE_NAME=pi-builds         Image repository (tags: baseline, lsp, ...)' \
 		'  PI_VERSION=1.4.0             Pi version passed to baseline Dockerfile' \
 		'  BASE_IMAGE=pi-builds:baseline  Parent image for extensions' \
-		'  DOCKER_BUILD_ARGS=           Extra docker build options'
+		'  DOCKER_BUILD_ARGS=           Extra docker build options' \
+		'  BUILDKIT_NO_CLIENT_TOKEN=1  Delegate registry auth to BuildKit backend'
