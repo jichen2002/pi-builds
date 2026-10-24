@@ -46,7 +46,17 @@ pi-builds/
         ├── subagent/
         │   └── Dockerfile          # 独立子 Agent
         ├── skills/
-        │   └── Dockerfile          # Regression Debugging Skill
+        │   ├── Dockerfile          # COPY 两个本地 Skills
+        │   ├── LICENSE.mattpocock
+        │   ├── UPSTREAM.md
+        │   └── skills/
+        │       ├── diagnosing-bugs/
+        │       │   ├── SKILL.md
+        │       │   └── scripts/hitl-loop.template.sh
+        │       └── tdd/
+        │           ├── SKILL.md
+        │           ├── tests.md
+        │           └── mocking.md
         └── web-search/
             ├── Dockerfile          # Web Search (runtime-selectable provider)
             └── web-search.json     # pi-web-access 限制配置
@@ -128,7 +138,7 @@ make lsp BASE_IMAGE=custom/pi:baseline  # 外部父镜像存在时无需构建�
 
 **Docker Hub Token 兼容性：** 当前默认 `docker` Driver 的构建环境中出现过 `docker pull` 正常、但 Buildx 客户端访问 `auth.docker.io/token` 时连接被重置的情况。已在 Makefile 默认导出 `BUILDKIT_NO_CLIENT_TOKEN=1`，使 Token 获取由 BuildKit 后端处理，因此通常可以直接执行 `make lsp` 或 `make all`。如不需要这一兼容设置，可以使用 `BUILDKIT_NO_CLIENT_TOKEN=0 make lsp` 覆盖。该配置可能改变 Registry 凭据的传递路径；使用独立远程或不可信 Builder 时，应评估认证和凭据安全性。
 
-`DOCKER_BUILD_ARGS` 也可以向 Dockerfile 传递额外的 `--build-arg`（如 `LSP_EXTENSION_VERSION`、`PYRIGHT_VERSION`）。修改 Pi 版本时应同步确认 Plan/Todo 和 Subagent 的 `PI_SOURCE_COMMIT` 与 Pi 运行版本兼容。Skills 镜像使用 Dockerfile heredoc，需要 BuildKit。
+`DOCKER_BUILD_ARGS` 也可以向 Dockerfile 传递额外的 `--build-arg`（如 `LSP_EXTENSION_VERSION`、`PYRIGHT_VERSION`）。修改 Pi 版本时应同步确认 Plan/Todo 和 Subagent 的 `PI_SOURCE_COMMIT` 与 Pi 运行版本兼容。Skills 镜像通过 Dockerfile `COPY` 安装仓库内维护的 Skill 文件；构建时不再动态拉取 Skill 或使用 heredoc 内嵌 Skill 内容。
 
 所有扩展 Dockerfile 默认 `ARG BASE_IMAGE=pi-builds:baseline`，可通过 `--build-arg BASE_IMAGE=...` 指定另一个已构建的基线镜像。Baseline 默认固定 Pi `1.4.0`。正式实验还应固定基础镜像 Digest 并保存实际构建产生的 Digest。
 
@@ -139,7 +149,7 @@ make lsp BASE_IMAGE=custom/pi:baseline  # 外部父镜像存在时无需构建�
 | `ast-search` | `@juvio15/pi-ast-grep@0.4.2`、`@ast-grep/cli@0.45.3`                                 | 显式关闭该插件附带的 Skill，减少与 Skill 实验的混淆                                                       |
 | `plan-todo`  | Pi `v1.4.0` 源码对应的 Todo、Plan Mode 示例                                          | **Todo 可用于无人值守任务；原版 Plan Mode 的“规划后确认执行”需要交互 UI，不能直接当作无人值守 Plan 实验** |
 | `subagent`   | Pi `v1.4.0` 官方 Subagent 示例和四种 Agent 定义                                      | 删除示例里写死的 Claude 模型，子 Agent 继承主模型；不复制预设工作流 Prompt                                |
-| `skills`     | 自带的 `regression-debugging` Skill                                                  | 只改变按需指导信息，不安装额外执行工具；需要支持 heredoc 的 Docker BuildKit                               |
+| `skills`     | 固定上游版本的 `diagnosing-bugs` + `tdd` | 仅加入 Skill 指令和参考文件；原版存在交互式确认环节，需评估无人值守兼容性 |
 | `web-search` | `pi-web-access@0.44.0`（只启用 `web_search`） | 搜索 Provider 由运行时配置决定；默认 `auto`，不启用 Fetch、Source Check 或交互命令 |
 
 ### Python-only LSP 镜像
@@ -153,6 +163,19 @@ make lsp
 # 如需变更 Pyright 版本：
 make lsp DOCKER_BUILD_ARGS="--build-arg PYRIGHT_VERSION=1.1.413"
 ```
+
+### Skills 镜像（diagnosing-bugs + tdd）
+
+`make skills` 构建 `pi-builds:skills`，安装来自 [mattpocock/skills](https://github.com/mattpocock/skills) 的 `diagnosing-bugs` 和 `tdd` 两个 Skill。原先 Dockerfile 中的 `regression-debugging` 已被替换，避免近似工作流混杂。
+
+所有 Skill 均作为本仓库文件管理，构建时通过 `COPY` 安装到 `/root/.pi/agent/skills/`。除两个 `SKILL.md` 外，包含上游引用的 `tests.md`、`mocking.md` 与 `hitl-loop.template.sh`。上游源代码 Commit、文件范围和 MIT 许可证记录在 [UPSTREAM.md](docker/extensions/skills/UPSTREAM.md)，不会在 Docker 构建时动态拉取最新版本。
+
+```bash
+make skills
+docker run --rm -it pi-builds:skills
+```
+
+**SWE-bench Verified 无人值守注意事项：** 为便于复现，这里保留上游原版。原版 `diagnosing-bugs` 严格要求先找到可复现的失败反馈，可能在无法复现时寻求人类输入；原版 `tdd` 要求用户确认测试接口，并引用未安装的 `codebase-design` Skill。建议记录实际激活率、阶段阻塞、Token 和工具开销；如需要自动化适配，应该另建版本而不是悄悄修改这份上游快照。
 
 ### Web Search 镜像（运行时选择搜索后端）
 
