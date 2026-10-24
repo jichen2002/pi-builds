@@ -48,7 +48,7 @@ pi-builds/
         ├── skills/
         │   └── Dockerfile          # Regression Debugging Skill
         └── web-search/
-            ├── Dockerfile          # DeepSeek Web Search
+            ├── Dockerfile          # Web Search (runtime-selectable provider)
             └── web-search.json     # pi-web-access 限制配置
 ```
 
@@ -87,7 +87,7 @@ pi-builds/
 | **Plan / Todo**        | 显式任务清单、步骤跟踪、先规划后执行的工作流                   | 是否减少复杂任务遗漏？强制 Plan 与可选 Todo 哪种更有效？          | [Pi Plan Mode 示例](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/plan-mode)、[Todo 示例](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/todo.ts) |
 | **Subagent**           | 独立上下文的任务委派；可测试探索、实现、审查及并行执行         | 隔离上下文与多 Agent 协作是否提升任务成功率，代价是多少？         | [Pi Subagent 示例](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/subagent)                                                                                                                  |
 | **Skill**              | 面向特定语言、工具或工作流的按需指导与配套资源                 | 专门指令能否弥补小模型的工程经验不足？                            | Pi 原生 [Skills](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md)                                                                                                                                  |
-| **Web Search** | 访问外部技术文档与问题资料的独立搜索工具 | 搜索结果是否提高 Coding Agent 的修复成功率？ | [pi-web-access](https://github.com/nicobailon/pi-web-access)，DeepSeek Search Provider |
+| **Web Search** | 访问外部技术文档与问题资料的独立搜索工具 | 搜索结果是否提高 Coding Agent 的修复成功率？ | [pi-web-access](https://github.com/nicobailon/pi-web-access)，可配置搜索后端 |
 | **Context Management** | 在原生 Compaction 之上探索更好的摘要、关键上下文保留或检索策略 | 长任务能否减少信息丢失及重复探索，同时控制 Token 成本？           | [Pi 自定义 Compaction 示例](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/custom-compaction.ts)                                                                                             |
 
 初步建议先对 **LSP、AST Search、Plan/Todo、Subagent、Skill、Web Search** 做单组件实验，再考虑更复杂的组合。Context Management 需要与 Pi 已有的自动 Compaction 比较，而不是与“完全没有压缩”比较。
@@ -111,7 +111,7 @@ make ast-search      # 构建 Baseline + AST Search
 make plan-todo       # 构建 Baseline + Plan/Todo
 make subagent        # 构建 Baseline + Subagent
 make skills          # 构建 Baseline + Skills
-make web-search      # 构建 Baseline + DeepSeek Web Search
+make web-search      # 构建 Baseline + Web Search
 make extensions      # 构建 Baseline + 全部六种扩展
 make help            # 查看可用目标和变量
 ```
@@ -140,26 +140,35 @@ make lsp BASE_IMAGE=custom/pi:baseline  # 外部父镜像存在时无需构建�
 | `plan-todo`  | Pi `v1.4.0` 源码对应的 Todo、Plan Mode 示例                                          | **Todo 可用于无人值守任务；原版 Plan Mode 的“规划后确认执行”需要交互 UI，不能直接当作无人值守 Plan 实验** |
 | `subagent`   | Pi `v1.4.0` 官方 Subagent 示例和四种 Agent 定义                                      | 删除示例里写死的 Claude 模型，子 Agent 继承主模型；不复制预设工作流 Prompt                                |
 | `skills`     | 自带的 `regression-debugging` Skill                                                  | 只改变按需指导信息，不安装额外执行工具；需要支持 heredoc 的 Docker BuildKit                               |
-| `web-search` | `pi-web-access@0.44.0`（仅启用 DeepSeek `web_search`）                             | 不启用 Fetch、Source Check 或交互命令；运行时需传入 `DEEPSEEK_API_KEY`                                    |
+| `web-search` | `pi-web-access@0.44.0`（只启用 `web_search`） | 搜索 Provider 由运行时配置决定；默认 `auto`，不启用 Fetch、Source Check 或交互命令 |
 
-### DeepSeek Web Search 镜像
+### Web Search 镜像（运行时选择搜索后端）
 
-`make web-search` 生成 `pi-builds:web-search`，基于 Baseline 安装固定版本的 [pi-web-access](https://github.com/nicobailon/pi-web-access)。配置文件位于 [docker/extensions/web-search/web-search.json](docker/extensions/web-search/web-search.json)：
+`make web-search` 生成 `pi-builds:web-search`，基于 Baseline 安装固定版本的 [pi-web-access](https://github.com/nicobailon/pi-web-access)。默认配置为 [docker/extensions/web-search/web-search.json](docker/extensions/web-search/web-search.json)：
 
-- 搜索提供方固定为 `deepseek`，`webSearch.allowedProviders=["deepseek"]`，不回退到 Exa、OpenAI 或其他搜索 API。
-- 仅暴露 `web_search`；关闭 `source_check`、`fetch_content`、`get_search_content`、交互命令、图片和 PDF 功能。
-- `toolActivation=eager`：Agent 从第一轮即可看到搜索 Tool；`workflow=none`：不启动 Curator，也不会额外调用摘要模型。
-- **API Key 不写入 Dockerfile 或镜像**。启动时通过 `DEEPSEEK_API_KEY` 注入；本地推理模型的配置与此独立。
+- `provider=auto`，不设置 `webSearch.allowedProviders`，由 pi-web-access 选择可用的搜索后端；**镜像没有锁定 DeepSeek 或其他 Provider**。
+- 为控制消融实验变量，默认仅启用 `web_search`，关闭 `source_check`、`fetch_content`、`get_search_content` 和交互命令。
+- `toolActivation=eager`：Agent 从第一轮即可使用搜索 Tool；`workflow=none`：不启用 Curator 或额外的搜索结果摘要模型。
+- API Key 和搜索后端配置均由**容器运行时**提供，不写入镜像。
+
+例如，无需重新构建即可选择 DeepSeek Search：
 
 ```bash
 make web-search
+cp docker/extensions/web-search/web-search.json /tmp/pi-web-search.json
+# 编辑 /tmp/pi-web-search.json：将 "provider": "auto" 改为 "provider": "deepseek"
+# 可选：设置 "webSearch": {"enabled": true, "allowedProviders": ["deepseek"]}，将运行时提供方限制为 DeepSeek
 
-# 将当前 Shell 已 export 的 DEEPSEEK_API_KEY 传入运行时
-docker run --rm -it -e DEEPSEEK_API_KEY \
-  -v "$PWD:/workspace" pi-builds:web-search
+docker run --rm -it \
+  -e DEEPSEEK_API_KEY \
+  -v /tmp/pi-web-search.json:/root/.pi/agent/web-search.json:ro \
+  -v "$PWD:/workspace" \
+  pi-builds:web-search
 ```
 
-如果 DeepSeek Search 使用内部 API Gateway，可以运行时设置 `PI_DEEPSEEK_BASE_URL`，但需确保网关支持兼容的 `/v1/tools/search` 路径。搜索 API 所需的网络访问需要在 Harbor 的网络白名单中放行（例如 `api.deepseek.com` 或内部网关），且应避免搜索 Benchmark 的公开答案。**关闭 Fetch Tool 只限制 Pi 注册的工具，不是安全隔离：`web_search` 自身仍支持 `includeContent` 参数；拥有 Bash 的 Agent 也可能自行访问网络**。若要严格限制，必须在 Case 网络层配置出站规则，并按实验口径记录是否获取了网页内容。
+使用 Brave 或 SearXNG 时，同样修改挂载文件中的 `provider`（如 `brave`、`searxng`），并配置所需的 `BRAVE_API_KEY` 或 `searxngBaseUrl`。支持的 Provider 和参数参见 [pi-web-access 文档](https://github.com/nicobailon/pi-web-access)。注意：`provider=auto` 可以触发插件自身的后端选择或回退；为保证实验结果可比较，建议每次评测明确记录或固定运行时 Provider。
+
+Harbor 网络策略需要放行实际使用的搜索 API（例如 `api.deepseek.com` 或内部网关）。应避免检索到 Benchmark 公开答案，并记录查询与结果。**关闭独立 Fetch Tool 不是安全隔离**：`web_search` 自身仍支持 `includeContent` 参数，拥有 Bash 的 Agent 也可能自行联网。若要严格限制，必须在 Case 网络层配置出站策略。
 
 Plan/Todo 和 Subagent 的官方示例文件固定到 Pi `v1.4.0` 的源码 Commit `4a080252f06caf63a525d7873c5d94d3c23887e0`，避免构建时随 `main` 分支漂移。下载发生在构建阶段，正常评测不需要在线安装插件。
 

@@ -1,10 +1,7 @@
 {
-  "provider": "deepseek",
+  "provider": "auto",
   "webSearch": {
-    "enabled": true,
-    "allowedProviders": [
-      "deepseek"
-    ]
+    "enabled": true
   },
   "workflow": "none",
   "toolActivation": "eager",

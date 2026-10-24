@@ -1,5 +1,5 @@
-# Pi Coding Agent + pi-web-access. Only web_search is registered and
-# DeepSeek is the only allowed search provider. Key is supplied at runtime.
+# Pi Coding Agent + pi-web-access. Only web_search is enabled by default.
+# Select the search backend at runtime with a mounted web-search.json.
 ARG BASE_IMAGE=pi-builds:baseline
 FROM ${BASE_IMAGE}
 
@@ -11,6 +11,7 @@ RUN pi install "npm:pi-web-access@${WEB_ACCESS_VERSION}" \
 COPY docker/extensions/web-search/web-search.json /root/.pi/agent/web-search.json
 
 # Catch invalid config during image construction without needing an API key.
-RUN node -e 'const fs=require("node:fs"); const c=JSON.parse(fs.readFileSync("/root/.pi/agent/web-search.json","utf8")); if(c.provider!=="deepseek" || c.toolActivation!=="eager" || c.webSearch.allowedProviders.join(",")!=="deepseek" || !c.tools.webSearch.enabled || Object.entries(c.tools).some(([k,v])=>k!=="webSearch"&&v.enabled)) process.exit(1)'
+RUN node -e 'const fs=require("node:fs"); const c=JSON.parse(fs.readFileSync("/root/.pi/agent/web-search.json","utf8")); if(c.provider!=="auto" || c.webSearch.allowedProviders!==undefined || c.toolActivation!=="eager" || c.workflow!=="none" || !c.tools.webSearch.enabled || Object.entries(c.tools).some(([k,v])=>k!=="webSearch"&&v.enabled)) process.exit(1)'
 
-# No DEEPSEEK_API_KEY ARG/ENV: pass -e DEEPSEEK_API_KEY only at runtime.
+# Do not bake provider credentials into the image. Supply runtime environment
+# variables and optionally bind-mount /root/.pi/agent/web-search.json.

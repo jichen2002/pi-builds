@@ -49,7 +49,7 @@ help:
 		'  make plan-todo       Build the Plan/Todo variant' \
 		'  make subagent        Build the Subagent variant' \
 		'  make skills          Build the Skills variant' \
-		'  make web-search      Build the DeepSeek Web Search variant' \
+		'  make web-search      Build the configurable Web Search variant' \
 		'' \
 		'Variables (override with make NAME=value):' \
 		'  DOCKER=docker                 Docker CLI executable' \
