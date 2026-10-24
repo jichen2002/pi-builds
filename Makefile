@@ -11,7 +11,7 @@ export BUILDKIT_NO_CLIENT_TOKEN ?= 1
 
 BASELINE_IMAGE := $(IMAGE_NAME):baseline
 BASE_IMAGE ?= $(BASELINE_IMAGE)
-EXTENSIONS := lsp ast-search plan-todo subagent skills
+EXTENSIONS := lsp ast-search plan-todo subagent skills web-search
 
 # Build the baseline first when extension images inherit our baseline tag.
 # An external BASE_IMAGE is assumed to exist and is not built here.
@@ -40,15 +40,16 @@ $(EXTENSIONS): $(EXTENSION_DEPENDENCIES)
 help:
 	@printf '%s\n' \
 		'Targets:' \
-		'  make                 Build baseline and all five extension images' \
+		'  make                 Build baseline and all six extension images' \
 		'  make all             Same as make' \
 		'  make baseline        Build only the Pi baseline' \
-		'  make extensions      Build all five extension images (and baseline if needed)' \
+		'  make extensions      Build all six extension images (and baseline if needed)' \
 		'  make lsp             Build the LSP variant' \
 		'  make ast-search      Build the AST Search variant' \
 		'  make plan-todo       Build the Plan/Todo variant' \
 		'  make subagent        Build the Subagent variant' \
 		'  make skills          Build the Skills variant' \
+		'  make web-search      Build the DeepSeek Web Search variant' \
 		'' \
 		'Variables (override with make NAME=value):' \
 		'  DOCKER=docker                 Docker CLI executable' \
