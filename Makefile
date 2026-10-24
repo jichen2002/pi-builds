@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := all
 
 DOCKER ?= docker
-IMAGE_NAME ?= pi-builds
+IMAGE_NAME ?= waybackmachine/pi-agent
 PI_VERSION ?= 1.4.0
 DOCKER_BUILD_ARGS ?=
 
